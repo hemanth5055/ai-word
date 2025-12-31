@@ -1,48 +1,66 @@
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   console.log('background <- message', msg?.type, msg?.word);
-  if (msg.type === "AI_MEANING") {
-    // Use the Gemini client request shape (model + contents). Keep using REST fetch
-    // Note: the API key is still passed in the URL here; consider moving it to secure storage.
-    const apiKey = "AIzaSyCAHmsFG2kTbOrls3_ycRw7oVUZl9BBNi8";
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-    const body = {
-      model: "gemini-2.5-flash",
-      contents: `Explain the word \"${msg.word}\" in very simple English.`
-    };
+  if (msg.type !== "AI_MEANING") return;
 
-    console.log('background -> Gemini request', url, body);
+  const word = (msg.word || "").trim();
+  if (!word) {
+    sendResponse({ meaning: "No word supplied" });
+    return true;
+  }
 
-    fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    })
-      .then((res) => {
-        console.log('background <- Gemini raw status', res.status);
-        return res.json().catch(err => {
-          console.error('background <- JSON parse error', err);
-          return null;
-        });
-      })
-      .then((data) => {
-        console.log('background <- Gemini data', data);
-        // support multiple response shapes
-        const meaning =
-          data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-          data?.output?.[0]?.content?.text ||
-          data?.text ||
-          data?.candidates?.[0]?.text ||
-          "Meaning not found";
+  const apiKey = "AIzaSyCAHmsFG2kTbOrls3_ycRw7oVUZl9BBNi8";
+  const url =
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
-        console.log('background -> meaning', meaning);
-        sendResponse({ meaning });
-      })
-      .catch((err) => {
-        console.error("Gemini request failed:", err);
-        sendResponse({ meaning: "Error fetching meaning" });
+  const body = {
+    model: "gemini-2.5-flash",
+    contents: [
+      {
+        parts: [
+          {
+            text: `Explain the word "${word}" in very simple English (only in one line).`
+          }
+        ]
+      }
+    ]
+  };
+
+  console.log('background -> Gemini request', url, body);
+
+  (async () => {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
       });
 
-    return true; // IMPORTANT
-  }
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        console.error("Gemini HTTP Error:", response.status, errorText);
+        sendResponse({ meaning: "Error fetching meaning" });
+        return;
+      }
+
+      const data = await response.json();
+      console.log("API Response:", data);
+
+      const meaning =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+        data?.output?.[0]?.content?.text?.trim() ||
+        data?.text?.trim() ||
+        data?.candidates?.[0]?.text?.trim() ||
+        "Meaning not found";
+
+      console.log("Meaning:", meaning);
+      sendResponse({ meaning });
+
+    } catch (err) {
+      console.error("Gemini request failed:", err);
+      sendResponse({ meaning: "Error fetching meaning" });
+    }
+  })();
+
+  return true;
 });
