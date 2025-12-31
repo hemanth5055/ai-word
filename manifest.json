@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "AI Word Meaning (Gemini + OCR)",
+  "version": "1.1",
+  "permissions": ["activeTab"],
+  "host_permissions": [
+    "<all_urls>",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+ "web_accessible_resources": [
+  {
+    "resources": [
+      "libs/tesseract.min.js",
+      "page-ocr.js"
+    ],
+    "matches": ["<all_urls>"]
+  }
+],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
